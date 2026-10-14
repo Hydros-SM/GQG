@@ -101,7 +101,7 @@ const TASK_ICON: Record<TaskType, typeof Layers> = {
 // два независимых счётчика (отобрано / сдано в лабораторию).
 export default function TaskDashboard() {
   const { taskType, taskId } = useParams<{ taskType: TaskType; taskId: string }>()
-  const { session, profile, loading: authLoading } = useAuth()
+  const { session, profile, canCreateWells, loading: authLoading } = useAuth()
 
   // Таблица "По дням": на телефоне свёрнута по умолчанию (полевому работнику
   // нужны забой и прогресс, а не вся история), на ПК развёрнута.
@@ -660,7 +660,7 @@ export default function TaskDashboard() {
             <Users size={15} /> Состав бригады
           </button>
           {/* Редактирование задания — руководству, для всех четырёх видов заданий */}
-          {isManagement(profile?.role) && siteId && (
+          {(isManagement(profile?.role) || (isDrilling && canCreateWells && drillingTask?.created_by === profile?.id && drillingTask?.foreman_id === profile?.id)) && siteId && (
             <Link to={`/sites/${siteId}/tasks/${taskType}/${taskId}/edit`} style={{ display: 'block' }}>
               <button type="button" className="btn-outline" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap', width: '100%' }}>
                 <Pencil size={15} /> Редактировать

@@ -13,7 +13,7 @@ import { shortName } from '../../lib/shortName'
 // «Моя скважина» с кнопкой новой сводки, что нужно исправить, бригада и
 // последние решения по сводкам.
 export default function MasterOverview() {
-  const { profile } = useAuth()
+  const { profile, canCreateWells } = useAuth()
   const [wells, setWells] = useState<DrillingTask[]>([])
   const [planned, setPlanned] = useState<DrillingTask[]>([])
   const [wellReports, setWellReports] = useState<Report[]>([])
@@ -108,6 +108,11 @@ export default function MasterOverview() {
             <MasterStartDrilling plannedWells={planned} onStarted={() => setReload((x) => x + 1)} />
           ) : (
             <p className="text-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>Запланированных скважин пока нет.</p>
+          )}
+          {canCreateWells && (
+            <Link to="/sites" style={{ display: 'inline-block', marginTop: 10, fontSize: 13 }}>
+              Создать новую скважину: выберите участок →
+            </Link>
           )}
         </div>
       )}

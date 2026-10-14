@@ -31,7 +31,8 @@ const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
 export default function DrillingTaskForm() {
   const { siteId, taskId } = useParams<{ siteId: string; taskId?: string }>()
   const isEditMode = Boolean(taskId)
-  const { session, profile, loading: authLoading } = useAuth()
+  const { session, profile, canCreateWells, loading: authLoading } = useAuth()
+  const isMaster = !isManagement(profile?.role)
   const navigate = useNavigate()
 
   const [organizations, setOrganizations] = useState<DrillingOrganization[]>([])
@@ -62,6 +63,7 @@ export default function DrillingTaskForm() {
   // отдельного создания задания через участок.
 
   const [submitting, setSubmitting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -121,8 +123,21 @@ export default function DrillingTaskForm() {
   if (authLoading) return <p>Загрузка…</p>
   if (!session) return <Navigate to="/login" replace />
   if (!siteId) return <p>Не указан участок.</p>
-  if (!isManagement(profile?.role)) {
-    return <p>{isEditMode ? 'Редактировать' : 'Создавать'} задания могут только гендир/техдир.</p>
+  if (!canCreateWells) {
+    return <p>{isEditMode ? 'Редактировать' : 'Создавать'} задания на бурение могут начальство и мастера бурения.</p>
+  }
+
+  async function handleDelete() {
+    if (!taskId) return
+    setSubmitting(true)
+    setError(null)
+    const { data, error: delError } = await supabase.from('drilling_tasks').delete().eq('id', taskId).select('id')
+    setSubmitting(false)
+    if (delError || !data || data.length === 0) {
+      setError(delError?.message ?? 'Удалить нельзя: по скважине уже есть согласованные сводки.')
+      return
+    }
+    navigate('/sites')
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -145,7 +160,7 @@ export default function DrillingTaskForm() {
       coord_local_x: coordX ? Number(coordX) : null,
       coord_local_y: coordY ? Number(coordY) : null,
       wellhead_elevation: elevation ? Number(elevation) : null,
-      foreman_id: foremanId || null,
+      foreman_id: isMaster ? profile.id : foremanId || null,
       start_date: startDate || null,
       projected_depth: projectedDepth ? Number(projectedDepth) : null,
       planned_daily_meters: plannedDailyMeters
@@ -165,12 +180,12 @@ export default function DrillingTaskForm() {
           .single()
       : await supabase
           .from('drilling_tasks')
-          .insert({ ...commonFields, created_by: profile.id })
+          .insert({ ...commonFields, created_by: profile.id, ...(isMaster ? { status: 'in_progress' as TaskStatus, start_date: startDate || new Date().toISOString().slice(0, 10) } : {}) })
           .select()
           .single()
 
     if (saveError || !task) {
-      setError(saveError?.message ?? 'Не удалось сохранить задание')
+      setError(isMaster && isEditMode ? 'Править скважину можно, пока по ней нет согласованных сводок. Обратитесь к начальству.' : (saveError?.message ?? 'Не удалось сохранить задание'))
       setSubmitting(false)
       return
     }
@@ -212,6 +227,10 @@ export default function DrillingTaskForm() {
     setSubmitting(false)
     // Новое задание — сразу предлагаем назначить геологические работы на этой
     // скважине (мастер можно пропустить). Правка — возвращаемся на участок.
+    if (isMaster) {
+      navigate(`/tasks/drilling/${task.id}/dashboard`)
+      return
+    }
     navigate(
       isEditMode
         ? `/sites/${siteId}`
@@ -283,7 +302,7 @@ export default function DrillingTaskForm() {
             )}
           </label>
 
-          {isEditMode && (
+          {isEditMode && !isMaster && (
             <label>
               Статус задания
               <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)}>
@@ -342,6 +361,7 @@ export default function DrillingTaskForm() {
             />
           </label>
 
+          {!isMaster && (
           <label>
             Бригадир
             <select
@@ -358,6 +378,7 @@ export default function DrillingTaskForm() {
             </select>
             <AreaFilterHint pick={areaPick} what="мастера бурения" />
           </label>
+          )}
 
           <label>
             Дата начала бурения
@@ -424,6 +445,19 @@ export default function DrillingTaskForm() {
           </label>
 
           {error && <p className="text-error span-2">{error}</p>}
+          {isMaster && isEditMode && taskId && (
+            <div className="span-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {confirmDelete ? (
+                <>
+                  <span style={{ fontSize: 13 }}>Удалить скважину и её черновики безвозвратно?</span>
+                  <button type="button" className="btn-danger" disabled={submitting} onClick={() => void handleDelete()}>Да, удалить</button>
+                  <button type="button" className="btn-outline" onClick={() => setConfirmDelete(false)}>Отмена</button>
+                </>
+              ) : (
+                <button type="button" className="btn-outline" onClick={() => setConfirmDelete(true)}>Удалить скважину</button>
+              )}
+            </div>
+          )}
 
           <button
             type="submit"
@@ -436,7 +470,7 @@ export default function DrillingTaskForm() {
           </button>
         </form>
 
-        {isEditMode && taskId && (
+        {isEditMode && taskId && !isMaster && (
           <div style={{ flex: '1 1 300px', minWidth: 280, display: 'grid', gap: 12, alignContent: 'start' }}>
             <div>
               <h2 style={{ margin: '0 0 4px' }}>Дополнительные работы на этой скважине</h2>

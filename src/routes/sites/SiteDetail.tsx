@@ -81,7 +81,7 @@ function AttentionBadges({ submitted, rejected }: { submitted: number; rejected:
 
 export default function SiteDetail() {
   const { siteId } = useParams<{ siteId: string }>()
-  const { session, profile, loading: authLoading } = useAuth()
+  const { session, profile, canCreateWells, loading: authLoading } = useAuth()
 
   const [site, setSite] = useState<Site | null>(null)
   const [drillingTasks, setDrillingTasks] = useState<DrillingTask[]>([])
@@ -338,6 +338,16 @@ export default function SiteDetail() {
               >
                 <Plus size={16} /> Задание
               </button>
+            </div>
+          )}
+
+          {canCreateWells && !isManagement(profile?.role) && (
+            <div style={{ margin: '16px 0 24px' }}>
+              <Link to={`/sites/${siteId}/tasks/drilling/new`}>
+                <button type="button" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Plus size={16} /> Новая скважина
+                </button>
+              </Link>
             </div>
           )}
 
