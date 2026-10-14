@@ -63,7 +63,7 @@ export default function MasterStartDrilling({ plannedWells, onStarted }: Props) 
 
   if (!profile || profile.role !== 'party_chief') return null
   // кнопка нужна, только если у мастера нет скважин в работе и есть что запускать
-  if (activeCount === null || activeCount > 0 || plannedWells.length === 0) return null
+  if (activeCount === null || activeCount >= 2 || plannedWells.length === 0) return null
 
   // доступные работники: моя бригада и без бригады (чужих не берём)
   const available = (role: Role) =>

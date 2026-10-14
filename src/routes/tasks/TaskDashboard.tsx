@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useWellHasCrew } from '../../hooks/useWellHasCrew'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -144,6 +145,7 @@ export default function TaskDashboard() {
   const [savingPlan, setSavingPlan] = useState(false)
 
   const isDrilling = taskType === 'drilling'
+  const hasCrew = useWellHasCrew(taskId, isDrilling && profile?.role === 'party_chief')
   const isCoreDescription = taskType === 'core-description'
   const isSawing = taskType === 'core-sawing'
   const isSampling = taskType === 'sampling'
@@ -644,6 +646,12 @@ export default function TaskDashboard() {
               <button type="button" disabled title="Скважина закрыта — новые сводки не вносятся" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap', width: '100%' }}>
                 <Plus size={15} /> Новая сводка
               </button>
+            ) : isDrilling && hasCrew === false ? (
+              <Link to="/my-crew" style={{ display: 'block' }}>
+                <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap', width: '100%' }} title="Пока не составлена бригада, сводки недоступны">
+                  <Users size={15} /> Составить бригаду
+                </button>
+              </Link>
             ) : (
               <Link to={`/tasks/${taskType}/${taskId}/reports/new`} style={{ display: 'block' }}>
                 <button type="button" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap', width: '100%' }}>

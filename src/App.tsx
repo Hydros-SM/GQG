@@ -30,6 +30,7 @@ import TaskDashboard from './routes/tasks/TaskDashboard'
 import UsersList from './routes/users/UsersList'
 import CostCategoriesSettings from './routes/settings/CostCategoriesSettings'
 import OrgChart from './routes/org/OrgChart'
+import MyCrew from './routes/crew/MyCrew'
 import DrillingOrganizationsSettings from './routes/settings/DrillingOrganizationsSettings'
 import WorkersSettings from './routes/settings/WorkersSettings'
 import SettingsHub from './routes/settings/SettingsHub'
@@ -84,6 +85,7 @@ function App() {
           <Route path="/users" element={<UsersList />} />
           <Route path="/settings/costs" element={<CostCategoriesSettings />} />
           <Route path="/org-chart" element={<OrgChart />} />
+          <Route path="/my-crew" element={<MyCrew />} />
           <Route path="/settings/organizations" element={<DrillingOrganizationsSettings />} />
           <Route path="/settings/workers" element={<WorkersSettings />} />
           <Route path="/settings/sample-types" element={<SampleTypesSettings />} />

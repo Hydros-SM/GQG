@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useWellHasCrew } from '../../hooks/useWellHasCrew'
 import { Link } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
@@ -21,6 +22,7 @@ export default function MasterOverview() {
   const [crew, setCrew] = useState<(Worker & { stay: WorkerStay | null })[]>([])
   const [loading, setLoading] = useState(true)
   const [reload, setReload] = useState(0)
+  const hasCrew = useWellHasCrew(wells[0]?.id, wells.length > 0, reload)
 
   useEffect(() => {
     if (!profile) return
@@ -92,7 +94,12 @@ export default function MasterOverview() {
             Сегодня: {sentToday.length === 0 ? 'сводок пока нет' : `отправлено — смена ${sentToday.join(', ')}`}
             {nextShift ? ` · нет сводки за смену ${nextShift}` : ' · все смены внесены'}
           </div>
-          {nextShift && (
+          {nextShift && hasCrew === false && (
+            <Link to="/my-crew" style={{ display: 'block', marginTop: 10 }}>
+              <button type="button" style={{ width: '100%' }}>Составьте бригаду, чтобы подать сводку</button>
+            </Link>
+          )}
+          {nextShift && hasCrew !== false && (
             <Link to={`/tasks/drilling/${well.id}/reports/new?shift=${nextShift}`} style={{ display: 'block', marginTop: 10 }}>
               <button type="button" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Plus size={15} /> Новая сводка (смена {nextShift})

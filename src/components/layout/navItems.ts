@@ -9,6 +9,7 @@ import {
   Map as MapIcon,
   Network,
   Settings,
+  Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { UserRole } from '../../types/roles'
@@ -37,6 +38,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Мои сводки',
     icon: FileClock,
     show: (role, _can, area) => role === 'party_chief' && area !== 'geology',
+  },
+  {
+    to: '/my-crew',
+    label: 'Моя бригада',
+    icon: Users,
+    show: (role, _can, area) => role === 'party_chief' && area === 'drilling',
   },
   { to: '/map', label: 'Карта', icon: MapIcon, show: () => true },
   {

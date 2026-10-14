@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useWellHasCrew } from '../../hooks/useWellHasCrew'
 import type { FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, MessageCircle, Check, Plus, X } from 'lucide-react'
@@ -79,6 +80,7 @@ export default function DailyReportForm() {
     reportId?: string
   }>()
   const isEditMode = Boolean(reportId)
+  const hasCrew = useWellHasCrew(taskId, taskType === 'drilling')
   const { session, profile, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -575,6 +577,18 @@ export default function DailyReportForm() {
   if (!taskId || !taskType) return <p>Не указано задание.</p>
   if (profile && profile.role !== 'party_chief') {
     return <p>Сводки вносит только назначенный ответственный.</p>
+  }
+  // Пока на скважине не составлена бригада, сводку по бурению подать нельзя (14.10.2026)
+  if (!isEditMode && taskType === 'drilling' && hasCrew === false) {
+    return (
+      <div style={{ display: 'grid', gap: 12, maxWidth: 520 }}>
+        <h2 style={{ margin: 0 }}>Сначала составьте бригаду</h2>
+        <p className="text-muted" style={{ margin: 0 }}>
+          На этой скважине ещё нет состава бригады. Составьте бригаду во вкладке «Моя бригада» и поставьте её на скважину, затем вернитесь к сводке.
+        </p>
+        <Link to="/my-crew"><button type="button">Перейти в «Мою бригаду»</button></Link>
+      </div>
+    )
   }
   // Закрытая скважина: новую сводку мастер уже не вносит (правка прежних — как раньше)
   if (!isEditMode && taskType === 'drilling' && drillingTask && (drillingTask.status === 'completed' || drillingTask.closed_reason)) {
