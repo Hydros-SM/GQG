@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { LogOut } from 'lucide-react'
+import { KeyRound, LogOut } from 'lucide-react'
+import ChangePasswordModal from '../ChangePasswordModal'
 import { useAuth } from '../../context/AuthContext'
 import { ROLE_LABELS } from '../../types/roles'
 import { shortName } from '../../lib/shortName'
@@ -25,6 +26,7 @@ interface UserMenuProps {
 export default function UserMenu({ placement = 'down', showLabel = false }: UserMenuProps) {
   const { profile, signOut } = useAuth()
   const [open, setOpen] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -89,6 +91,18 @@ export default function UserMenu({ placement = 'down', showLabel = false }: User
               role="menuitem"
               onClick={() => {
                 setOpen(false)
+                setPasswordOpen(true)
+              }}
+            >
+              <KeyRound size={16} />
+              Сменить пароль
+            </button>
+            <button
+              type="button"
+              className="user-menu-item"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
                 signOut()
               }}
             >
@@ -98,6 +112,7 @@ export default function UserMenu({ placement = 'down', showLabel = false }: User
           </motion.div>
         )}
       </AnimatePresence>
+      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>
   )
 }
