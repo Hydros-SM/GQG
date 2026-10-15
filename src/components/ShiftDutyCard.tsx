@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isMasterProfile } from '../lib/masters'
 import { ArrowRightLeft, LogIn } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { isManagement } from '../types/roles'
 import Modal from './Modal'
 import { formatRu, stayInfo } from '../lib/workerStay'
-import type { WorkerStay } from '../types/database'
+import type { Position, WorkerStay } from '../types/database'
 import { shortName } from '../lib/shortName'
 
 interface Handover {
@@ -78,12 +79,15 @@ export default function ShiftDutyCard() {
       if (data) setOnDuty(Boolean(data.on_duty))
     }
     if (isMgmt) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, on_duty')
-        .eq('role', 'party_chief')
-        .order('full_name')
-      setChiefs((data ?? []) as { id: string; full_name: string; on_duty: boolean }[])
+      const [{ data }, { data: posRows }] = await Promise.all([
+        supabase.from('profiles').select('id, full_name, on_duty, role, position_id').eq('role', 'party_chief').order('full_name'),
+        supabase.from('positions').select('*'),
+      ])
+      setChiefs(
+        ((data ?? []) as { id: string; full_name: string; on_duty: boolean; role: string; position_id: string | null }[]).filter((x) =>
+          isMasterProfile(x, (posRows ?? []) as Position[]),
+        ),
+      )
     }
     const { data: hs } = await supabase
       .from('shift_handovers')

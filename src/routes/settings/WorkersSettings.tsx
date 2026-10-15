@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isMasterProfile } from '../../lib/masters'
 import { shortName } from '../../lib/shortName'
 import type { FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
@@ -431,7 +432,7 @@ export default function WorkersSettings() {
     ])
     setWorkers(workersRes.data ?? [])
     setOrganizations(orgsRes.data ?? [])
-    setForemen(foremenRes.data ?? [])
+    setForemen((foremenRes.data ?? []).filter((x) => isMasterProfile(x, positionsRes.data ?? [])))
     setAllProfiles(profilesRes.data ?? [])
     setPositions(positionsRes.data ?? [])
     setLoading(false)

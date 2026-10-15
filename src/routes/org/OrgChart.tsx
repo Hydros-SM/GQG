@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isMasterProfile } from '../../lib/masters'
 import type { FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { Network, UserCircle2, Plus, Search, ChevronRight, Users, ArrowRight, ArrowDown } from 'lucide-react'
@@ -589,7 +590,7 @@ export default function OrgChart() {
             workerName={shortName(p.fullName)}
             foremanId={p.foremanId}
             canManage={canEdit || (!!profile && p.foremanId === profile.id)}
-            masters={profiles.filter((x) => x.role === 'party_chief').map((x) => ({ id: x.id, name: shortName(x.full_name), onDuty: x.on_duty ?? null }))}
+            masters={profiles.filter((x) => isMasterProfile(x, positions)).map((x) => ({ id: x.id, name: shortName(x.full_name), onDuty: x.on_duty ?? null }))}
             activeTasks={activeTasks}
             onChanged={load}
           />

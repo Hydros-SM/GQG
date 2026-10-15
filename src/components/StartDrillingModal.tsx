@@ -30,7 +30,7 @@ export default function StartDrillingModal({
   const [daily, setDaily] = useState(well.planned_daily_meters != null ? String(well.planned_daily_meters) : '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const pick = useAreaCandidates('drilling', foremanId ? [foremanId] : [])
+  const pick = useAreaCandidates('drilling', foremanId ? [foremanId] : [], true)
 
   useEffect(() => {
     if (!open) return

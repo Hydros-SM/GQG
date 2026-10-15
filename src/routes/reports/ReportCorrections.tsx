@@ -11,7 +11,8 @@ import { MASTER_COLORS } from '../../components/report/ReportCharts'
 import { DRILL_DIAMETERS, paintIntervals, type DiamInterval } from '../../lib/drillDiameters'
 import { round2 } from '../../lib/taskProgress'
 import { formatRu } from '../../lib/workerStay'
-import type { CostCategory, CostItem, DrillingTask, Profile, Report, Site } from '../../types/database'
+import type { CostCategory, CostItem, DrillingTask, Position, Profile, Report, Site } from '../../types/database'
+import { isMasterProfile } from '../../lib/masters'
 import { shortName } from '../../lib/shortName'
 
 interface DiamRow {
@@ -89,7 +90,7 @@ const labelOf = (f: Fields) => (f.shift ? `${dm(f.date)}, смена ${f.shift}`
 // боковой редактор смены, мини-схема скважины с подсветкой изменений,
 // подтверждение «что изменится» и журнал лентой по дням с фильтрами.
 export default function ReportCorrections() {
-  const { session, can, loading: authLoading } = useAuth()
+  const { session, profile, can, loading: authLoading } = useAuth()
   const isMobile = useIsMobile()
   // На узком экране карточка смены открывается шторкой, а не колонкой справа
   const narrow = useMediaQuery('(max-width: 1279px)')
@@ -119,6 +120,13 @@ export default function ReportCorrections() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Добавление пропущенной даты (15.10.2026): новые сводки живут в таблице как черновые
+  // строки и создаются вместе с остальными правками при «Применить».
+  const [newIds, setNewIds] = useState<Set<string>>(new Set())
+  const [addOpen, setAddOpen] = useState(false)
+  const [addDate, setAddDate] = useState('')
+  const [addShifts, setAddShifts] = useState<Record<1 | 2, boolean>>({ 1: true, 2: true })
+  const [addError, setAddError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session) return
@@ -128,12 +136,13 @@ export default function ReportCorrections() {
       supabase.from('profiles').select('*').eq('role', 'party_chief').order('full_name'),
       supabase.from('cost_items').select('*').order('name'),
       supabase.from('cost_categories').select('*').order('name'),
-    ]).then(([s, t, p, ci, cc]) => {
+      supabase.from('positions').select('*'),
+    ]).then(([s, t, p, ci, cc, pos]) => {
       setCostItems((ci.data ?? []) as CostItem[])
       setCostCats((cc.data ?? []) as CostCategory[])
       setSites((s.data ?? []) as Site[])
       setTasks((t.data ?? []) as DrillingTask[])
-      setMasters((p.data ?? []) as Profile[])
+      setMasters(((p.data ?? []) as Profile[]).filter((x) => isMasterProfile(x, (pos.data ?? []) as Position[])))
     })
   }, [session])
 
@@ -183,6 +192,7 @@ export default function ReportCorrections() {
     }
     setReports(list)
     setOrig(o)
+    setNewIds(new Set())
     setEdits({})
     setVal(null)
     setAck(false)
@@ -219,12 +229,66 @@ export default function ReportCorrections() {
       return next
     })
   }
-  const resetReport = (id: string) =>
+  const dropDrafts = (ids: Set<string>) => {
+    if (ids.size === 0) return
+    setReports((prev) => prev.filter((r) => !ids.has(r.id)))
+    setOrig((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !ids.has(k))))
+    setNewIds((prev) => new Set([...prev].filter((x) => !ids.has(x))))
+    if (panelId && ids.has(panelId)) setPanelId(null)
+  }
+  const resetReport = (id: string) => {
+    if (newIds.has(id)) dropDrafts(new Set([id]))
     setEdits((prev) => {
       const next = { ...prev }
       delete next[id]
       return next
     })
+  }
+  const discardAll = () => {
+    dropDrafts(new Set(newIds))
+    setEdits({})
+    setVal(null)
+    setAck(false)
+  }
+  const nextDay = (iso: string) => {
+    const d = new Date(iso + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() + 1)
+    return d.toISOString().slice(0, 10)
+  }
+  function openAdd(defaultDate: string) {
+    setAddDate(defaultDate)
+    setAddShifts({ 1: true, 2: true })
+    setAddError(null)
+    setAddOpen(true)
+  }
+  function addDay() {
+    if (!profile || !taskId) return
+    if (!addDate) return setAddError('Укажите дату')
+    if (addDate > new Date().toISOString().slice(0, 10)) return setAddError('Нельзя добавить сводку на будущую дату')
+    const shifts = ([1, 2] as const).filter((x) => addShifts[x])
+    if (shifts.length === 0) return setAddError('Выберите хотя бы одну смену')
+    const taken = shifts.filter((x) => reports.some((r) => { const e = eff(r.id); return e.date === addDate && e.shift === String(x) }))
+    if (taken.length > 0) return setAddError('На эту дату уже есть сводка за смену ' + taken.join(', '))
+    const siteOfTask = tasks.find((t) => t.id === taskId)?.site_id ?? ''
+    const created: Report[] = []
+    const blank: Record<string, Fields> = {}
+    const ed: Record<string, Partial<Fields>> = {}
+    for (const x of shifts) {
+      const id = crypto.randomUUID()
+      created.push({ id, drilling_task_id: taskId, site_id: siteOfTask, author_id: profile.id, report_date: addDate, shift_number: x, approval_status: 'approved', edit_count: 0 } as unknown as Report)
+      blank[id] = { meters: '0', hours: '', authorId: profile.id, notes: '', date: '', shift: '', diameters: [], casings: [], costs: [] }
+      ed[id] = { date: addDate, shift: String(x) }
+    }
+    setNames((prev) => ({ ...prev, [profile.id]: shortName(profile.full_name) }))
+    setReports((prev) => [...prev, ...created])
+    setOrig((prev) => ({ ...prev, ...blank }))
+    setEdits((prev) => ({ ...prev, ...ed }))
+    setNewIds((prev) => new Set([...prev, ...created.map((c) => c.id)]))
+    setMsg(null)
+    setAck(false)
+    setAddOpen(false)
+    setPanelId(created[0].id)
+  }
 
   const ordered = useMemo(
     () =>
@@ -259,6 +323,22 @@ export default function ReportCorrections() {
   const payload = useMemo(
     () =>
       Object.entries(edits).map(([id, e]) => {
+        if (newIds.has(id)) {
+          const nf = { ...orig[id], ...e } as Fields
+          return {
+            report_id: id,
+            new: true,
+            date: nf.date,
+            shift: nf.shift === '' ? null : Number(nf.shift),
+            author_id: nf.authorId,
+            meters: Number(nf.meters) || 0,
+            hours: numOrNull(nf.hours),
+            notes: nf.notes,
+            diameters: nf.diameters.filter((d) => d.code).map((d) => ({ from: Number(d.from), to: Number(d.to), code: d.code, reaming: d.reaming })),
+            casings: nf.casings.filter((c) => c.code).map((c) => ({ code: c.code, depth: Number(c.depth) })),
+            costs: nf.costs.filter((c) => c.item).map((c) => ({ item: c.item, qty: Number(c.qty) })),
+          } as Record<string, unknown>
+        }
         const p: Record<string, unknown> = { report_id: id }
         if (e.meters !== undefined) p.meters = Number(e.meters) || 0
         if (e.hours !== undefined) p.hours = numOrNull(e.hours)
@@ -271,7 +351,7 @@ export default function ReportCorrections() {
         if (e.casings !== undefined) p.casings = e.casings.filter((c) => c.code).map((c) => ({ code: c.code, depth: Number(c.depth) }))
         return p
       }),
-    [edits],
+    [edits, newIds, orig],
   )
 
   useEffect(() => {
@@ -323,7 +403,7 @@ export default function ReportCorrections() {
     }
     setConfirmOpen(false)
     setReason('')
-    setMsg(`Исправления применены (сводок: ${payload.length}). Забой: ${res.old_depth} → ${res.new_depth} м.`)
+    setMsg(`Изменения применены (сводок: ${payload.length}${newIds.size > 0 ? `, добавлено: ${newIds.size}` : ''}). Забой: ${res.old_depth} → ${res.new_depth} м.`)
     await loadWell()
   }
 
@@ -649,15 +729,15 @@ export default function ReportCorrections() {
                             <div style={{ fontSize: 13 }}>
                               {Object.entries(l.changes).map(([k, v]) => (
                                 <div key={k}>
-                                  <span className="text-muted">{FIELD_LABELS[k] ?? k}: </span>
-                                  {k === 'diameters' || k === 'casings' || k === 'costs' ? 'изменены' : `${showVal(k, v.old)} → ${showVal(k, v.new)}`}
+                                  {k !== 'created' && <span className="text-muted">{FIELD_LABELS[k] ?? k}: </span>}
+                                  {k === 'created' ? 'сводка добавлена администратором' : k === 'diameters' || k === 'casings' || k === 'costs' ? 'изменены' : `${showVal(k, v.old)} → ${showVal(k, v.new)}`}
                                 </div>
                               ))}
                             </div>
                             <div className="text-muted" style={{ fontSize: 12 }}>Причина: {l.reason}</div>
                             {l.reverted ? (
                               <span className="badge badge-neutral" style={{ marginTop: 4, justifySelf: 'start' }}>откатено</span>
-                            ) : (
+                            ) : 'created' in l.changes ? null : (
                               <button type="button" className="btn-outline" disabled={busy} onClick={() => revert(l.id)} style={{ marginTop: 4, fontSize: 12, padding: '3px 10px', display: 'inline-flex', gap: 5, alignItems: 'center', justifySelf: 'start' }}>
                                 <Undo2 size={13} /> Откатить
                               </button>
@@ -685,8 +765,17 @@ export default function ReportCorrections() {
                       <tr><th style={{ width: 56 }}>Смена</th><th>Мастер</th><th style={{ width: 90 }}>Метры</th><th style={{ width: 70 }}>Часы</th><th style={{ width: 120 }}>Забой после</th><th>Метки</th></tr>
                     </thead>
                     <tbody>
-                      {days.map((g) => (
+                      {days.map((g, gi) => (
                         <Fragment key={g.date}>
+                          {rowFilter === 'all' && (
+                            <tr className="corr-add">
+                              <td colSpan={6} style={{ padding: '2px 8px' }}>
+                                <button type="button" className="corr-link" onClick={() => openAdd(gi === 0 ? g.date : nextDay(days[gi - 1].date))}>
+                                  <Plus size={11} /> добавить дату
+                                </button>
+                              </td>
+                            </tr>
+                          )}
                           <tr className="corr-day">
                             <td colSpan={6}>
                               {formatRu(g.date).slice(0, 5)} · {round2(g.rows.reduce((s, r) => s + (Number(eff(r.id).meters) || 0), 0))} м
@@ -746,7 +835,8 @@ export default function ReportCorrections() {
                                         {errs[0].startsWith('Отрицательный') ? 'отрицательный метраж' : errs[0].startsWith('Интервалы') ? 'диаметры не сходятся' : 'ошибка'}
                                       </span>
                                     )}
-                                    {(r.edit_count ?? 0) > 0 && <span className="badge badge-neutral" title="Эта сводка уже исправлялась">испр.</span>}
+                                    {newIds.has(r.id) && <span className="badge badge-primary" title="Новая сводка: создаётся при «Применить»">новая</span>}
+                                    {!newIds.has(r.id) && (r.edit_count ?? 0) > 0 && <span className="badge badge-neutral" title="Эта сводка уже исправлялась">испр.</span>}
                                     {f.diameters.some((d) => d.reaming) && <span className="text-muted" style={{ fontSize: 11 }}>расш.</span>}
                                     {f.casings.length > 0 && <span className="text-muted" style={{ fontSize: 11 }}>обс. {f.casings.map((c) => c.code).join(',')}</span>}
                                     {f.costs.length > 0 && <span className="text-muted" style={{ fontSize: 11 }}>затр. {f.costs.length}</span>}
@@ -760,6 +850,15 @@ export default function ReportCorrections() {
                           })}
                         </Fragment>
                       ))}
+                      {rowFilter === 'all' && days.length > 0 && (
+                        <tr className="corr-add">
+                          <td colSpan={6} style={{ padding: '2px 8px' }}>
+                            <button type="button" className="corr-link" onClick={() => openAdd(nextDay(days[days.length - 1].date))}>
+                              <Plus size={11} /> добавить дату
+                            </button>
+                          </td>
+                        </tr>
+                      )}
                       {days.length === 0 && (
                         <tr><td colSpan={6} className="text-muted" style={{ padding: 16 }}>Нет строк по этому фильтру.</td></tr>
                       )}
@@ -784,6 +883,27 @@ export default function ReportCorrections() {
                   </aside>
                 )}
               </div>
+
+              <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Добавить дату">
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <p className="text-muted" style={{ margin: 0, fontSize: 13 }}>
+                    Будут добавлены согласованные сводки администратора за выбранные смены. Метры, диаметры, обсадку и затраты заполните в таблице и нажмите «Применить».
+                  </p>
+                  <label>
+                    Дата
+                    <input type="date" value={addDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setAddDate(e.target.value)} />
+                  </label>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    {([1, 2] as const).map((x) => (
+                      <label key={x} style={{ display: 'flex', gap: 6, alignItems: 'center', margin: 0 }}>
+                        <input type="checkbox" style={{ width: 'auto' }} checked={addShifts[x]} onChange={(e) => setAddShifts((p) => ({ ...p, [x]: e.target.checked }))} /> Смена {x}
+                      </label>
+                    ))}
+                  </div>
+                  {addError && <p className="text-error" style={{ margin: 0 }}>{addError}</p>}
+                  <button type="button" onClick={addDay}>Добавить в таблицу</button>
+                </div>
+              </Modal>
 
               {(isMobile || narrow) && (
                 <Modal open={!!panelReport} onClose={() => setPanelId(null)} title="Смена">
@@ -820,7 +940,7 @@ export default function ReportCorrections() {
                     {hasErrors && val!.errors.some((x) => x.includes('Интервалы диаметров')) && (
                       <button type="button" className="btn-outline" onClick={fitIntervals}>Подогнать диаметры</button>
                     )}
-                    <button type="button" className="btn-outline" disabled={busy} onClick={() => { setEdits({}); setVal(null); setAck(false) }}>Сбросить</button>
+                    <button type="button" className="btn-outline" disabled={busy} onClick={discardAll}>Сбросить</button>
                     <button type="button" disabled={!canOpenConfirm || busy} onClick={() => setConfirmOpen(true)}>Применить…</button>
                   </>
                 )}

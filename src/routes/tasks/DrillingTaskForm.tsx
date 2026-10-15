@@ -48,7 +48,7 @@ export default function DrillingTaskForm() {
   const [coordY, setCoordY] = useState('')
   const [elevation, setElevation] = useState('')
   const [foremanId, setForemanId] = useState('')
-  const areaPick = useAreaCandidates('drilling', foremanId ? [foremanId] : [])
+  const areaPick = useAreaCandidates('drilling', foremanId ? [foremanId] : [], true)
   const [startDate, setStartDate] = useState('')
   const [projectedDepth, setProjectedDepth] = useState('')
   const [plannedDailyMeters, setPlannedDailyMeters] = useState('')

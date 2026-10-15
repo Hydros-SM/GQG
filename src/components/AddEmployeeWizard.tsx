@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { isMasterProfile } from '../lib/masters'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { createEmployeeWithLogin } from '../lib/grantAccess'
@@ -59,7 +60,7 @@ export default function AddEmployeeWizard({
   const position = positions.find((p) => p.id === positionId) ?? null
   const level = position?.level ?? 5
   const canLogin = levelHasLogin(level)
-  const masters = profiles.filter((p) => p.role === 'party_chief')
+  const masters = profiles.filter((p) => isMasterProfile(p, positions))
 
   function reset() {
     setStep(1)

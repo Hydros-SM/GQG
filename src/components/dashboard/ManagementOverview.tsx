@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
+import { isMasterProfile } from '../../lib/masters'
 import { Link } from 'react-router-dom'
 import { ClipboardCheck, Undo2, CalendarOff, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { round2 } from '../../lib/taskProgress'
 import { addDaysIso, formatRu, stayInfo, todayIso } from '../../lib/workerStay'
-import type { DrillingTask, Profile, WorkerStay } from '../../types/database'
+import type { DrillingTask, Position, Profile, WorkerStay } from '../../types/database'
 import { shortName } from '../../lib/shortName'
 
 interface Rep {
@@ -36,7 +37,7 @@ export default function ManagementOverview({ pendingApprovals }: { pendingApprov
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [tRes, rRes, pRes, sRes, lRes, hRes] = await Promise.all([
+      const [tRes, rRes, pRes, sRes, lRes, hRes, posRes] = await Promise.all([
         supabase.from('drilling_tasks').select('*'),
         supabase
           .from('reports')
@@ -46,13 +47,14 @@ export default function ManagementOverview({ pendingApprovals }: { pendingApprov
         supabase.from('worker_stays').select('*').is('departed_on', null),
         supabase.from('report_status_log').select('report_id, action, created_at').order('created_at', { ascending: false }).limit(8),
         supabase.from('shift_handovers').select('from_name, to_name, created_at').order('created_at', { ascending: false }).limit(3),
+        supabase.from('positions').select('*'),
       ])
       if (cancelled) return
       const taskList = (tRes.data ?? []) as DrillingTask[]
       const repList = (rRes.data ?? []) as Rep[]
       setTasks(taskList)
       setReports(repList)
-      setChiefs((pRes.data ?? []) as Profile[])
+      setChiefs(((pRes.data ?? []) as Profile[]).filter((x) => isMasterProfile(x, (posRes.data ?? []) as Position[])))
       setStays((sRes.data ?? []) as WorkerStay[])
       const wellOf = new Map(taskList.map((t) => [t.id, t.well_number]))
       const repOf = new Map(repList.map((r) => [r.id, r]))

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { isMasterProfile } from '../lib/masters'
 import { supabase } from '../lib/supabaseClient'
 import type { Position, Profile, WorkArea } from '../types/database'
 
@@ -8,7 +9,7 @@ import type { Position, Profile, WorkArea } from '../types/database'
 // «прочее») в отфильтрованный список не попадают — для них есть «Показать
 // всех». Уже выбранные значения всегда остаются в списке, даже если не
 // подходят по должности, чтобы форма правки не теряла текущего человека.
-export function useAreaCandidates(area: WorkArea, selectedIds: string[] = []) {
+export function useAreaCandidates(area: WorkArea, selectedIds: string[] = [], masterOnly = false) {
   const [all, setAll] = useState<Profile[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,10 +35,12 @@ export function useAreaCandidates(area: WorkArea, selectedIds: string[] = []) {
   const candidates = useMemo(() => {
     if (showAll) return all
     const areaByPosition = new Map(positions.map((p) => [p.id, p.work_area]))
-    const filtered = all.filter((p) => p.position_id != null && areaByPosition.get(p.position_id) === area)
+    const filtered = all.filter(
+      (p) => p.position_id != null && areaByPosition.get(p.position_id) === area && (!masterOnly || isMasterProfile(p, positions)),
+    )
     const extra = all.filter((p) => selectedKey.split(',').includes(p.id) && !filtered.some((f) => f.id === p.id))
     return [...filtered, ...extra]
-  }, [all, positions, area, showAll, selectedKey])
+  }, [all, positions, area, showAll, selectedKey, masterOnly])
 
   return {
     candidates,
